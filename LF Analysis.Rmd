@@ -1,0 +1,227 @@
+---
+title: "Business Statistics Mid-Term Assessment IB94X0 2022-2023 #1"
+author: "2224040"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+This is to certify that the work I am submitting is my own. All external references and sources are clearly acknowledged and identified within the contents. I am aware of the University of Warwick regulation concerning plagiarism and collusion.
+
+No substantial part(s) of the work submitted here has also been submitted by me in other assessments for accredited courses of study, and I acknowledge that if this has been done an appropriate reduction in the mark I might otherwise have received will be made.
+
+---
+
+# Section 1
+
+```{r setup, message=FALSE, warning=FALSE}
+# install.packages("emmeans")
+# install.packages("gridExtra")
+library(tidyverse)
+library(emmeans)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(RColorBrewer)
+options(width=100)
+```
+
+This report completes the requests of a panel of Fire service managers and local politicians, performing the specific analyses requested.
+
+1. Provide the costs of responding to fires and false alarms
+
+2. Perform the distribution of response times for the three different types of incident
+
+3. Perform the distribution of response times
+
+4. Perform the distribution of response times for the three different types of incident
+
+5. Perform summary of special service response times
+
+6. Perform a two sample t-test to see if there is a significant difference in the average response time for Ealing borough compared to Greenwich borough
+
+7. Perform confidence intervals for the estimates for each borough as well as the CI for the difference between boroughs
+
+---
+
+## Data Dictionary
+
+This data is provided by the London Fire Brigade. The variables are described in the table below
+
+Variable | Description
+------------- | -------------
+IncidentNumber | LFB unique identifier for the incident
+DateOfCall | Date the 999 call for the incident was received by Brigade Control
+TimeOfCall | Time the 999 call for the incident was received Brigade Control
+IncidentGroup | High level description of the incident; Fire, Special Service or False Alarm
+StopCodeDescription | Stop code is an LFB short description of the type of incident attended 
+SpecialServiceType | Special Services are emergencies other than Fire that the LFB attend. Special Service Type categorises these into 21 different services
+PropertyCategory | A high level group to describe where the incident took place
+PropertyType | A more detailed description of where the incident took place 
+AddressQualifier | This describes where the incident happened in relation to the address recorded
+Postcode_full | The full postcode for the address recorded for the incident. This is withheld for incidents where the property category is Dwelling in consideration of Data Protection principles
+Postcode_district | The partial district postcode (eg SE1) for the address recorded for the incident.
+WardCode | The Ward Code for the incident address recorded
+WardName | The Ward Name for the incident address recorded
+BoroughCode | The Borough Code for the incident address recorded
+BoroughName | The Borough Code for the incident address recorded
+Easting_m | The map easting coordinate for the incident location (to the nearest meter). This is withheld for incidents where the property category is Dwelling
+Northing_m | The map northing coordinate for the incident location (to the nearest meter). This is withheld for incidents where the property category is Dwelling
+Easting_rounded | The map easting representing the centre of a 100x100m area where the incident occurred.
+Northing_rounded | The map northing representing the centre of a 100x100m area where the incident occurred. 
+FRS | The name of the Fire & Rescue Service area where the incident occurred; either London or the name of the neighbouring brigade where incident happen 'over-the-border'
+IncidentStationGround | A description of the fire station area ("Ground") where the incident happened.
+FirstPumpArriving_AttendanceTime | The attendance time (in seconds) for the first fire engine to arrive after it has been mobilised from a fire station (or other location if it was mobile by Brigade Control at the time of the call).
+FirstPumpArriving_DeployedFromStation | The fire station where the fire engine shown as being the first (the time in the above field) was sent from.
+SecondPumpArriving_AttendanceTime | The attendance time (in seconds) for the second fire engine to arrive after it has been mobilised
+SecondPumpArriving_DeployedFromStation | The fire station where the fire engine shown as being the second (the time in the above field) was sent from.
+NumStationsWithPumpsAttending | The number of fire stations where fire engines were sent to support the incident. For large incidents this will include any stations involved in supplying additional and/or relief fire crews.
+NumPumpsAttending | The total number of fire engines in attendance at the incident (excluding relief fire crews)
+Notional Cost (£) | An estimate of the cost of the incident response
+
+---
+
+## Read Data
+
+```{r, message=FALSE, warning=FALSE}
+fire_data <- read_csv("London_Fire_data.csv")
+```
+
+## Provide the costs of responding to fires and false alarms
+
+```{r}
+fire_data2 <- fire_data %>% filter(!is.na(`Notional Cost (£)`))
+( fires_cost <- sum(fire_data2$`Notional Cost (£)`) )
+```
+```{r}
+false_alarms <- fire_data2 %>% filter(IncidentGroup == "False Alarm")  
+( false_alarms_cost <- sum(false_alarms$`Notional Cost (£)`) )
+```
+```{r}
+( mean_fire_cost <- mean(fire_data2$`Notional Cost (£)`) )
+```
+```{r}
+( mean_false_alarms_cost <- mean(false_alarms$`Notional Cost (£)`) )
+```
+
+## Perform the distribution of response times
+
+```{r}
+response <- filter(fire_data, FirstPumpArriving_AttendanceTime!=0)
+ggplot(response) + 
+  geom_histogram(aes(x=response$FirstPumpArriving_AttendanceTime), binwidth = 2, color=brewer.pal(7, "Set1")[2]) + 
+  ggtitle("The Distribution of Response Times") + 
+  geom_vline(aes(xintercept = mean(response$FirstPumpArriving_AttendanceTime)), colour="red") +  
+  labs(x="Response Time") + 
+  geom_text(aes(x=mean(response$FirstPumpArriving_AttendanceTime)+200, label=paste0("Mean=", round(mean(response$FirstPumpArriving_AttendanceTime), 2)), y=2300))
+```
+
+## Perform the distribution of response times for the three different types of incident
+
+```{r}
+ggplot(response) + geom_histogram(aes(x = response$FirstPumpArriving_AttendanceTime, fill = IncidentGroup), binwidth = 2, alpha = 0.7) + labs(x="Response Time")
+
+ggplot(response) + 
+  geom_histogram(aes(x = response$FirstPumpArriving_AttendanceTime), binwidth = 2, color=brewer.pal(7, "Set1")[2]) + 
+  ggtitle("The Ditribution of Response Times for Differents Types of Incidents") + 
+  facet_grid(~ IncidentGroup) + 
+  labs(x="Response Time")
+```
+
+## Perform summary of special service response times
+
+```{r}
+sp_time <- response %>% filter(IncidentGroup == 'Special Service') 
+sp_group <- sp_time %>% group_by(SpecialServiceType) %>% summarise(n=n(),  mean=mean(FirstPumpArriving_AttendanceTime), '10th_percentile'=quantile(FirstPumpArriving_AttendanceTime, c(0.1)), '90th_percentile'=quantile(FirstPumpArriving_AttendanceTime, c(0.9)))
+sp_group
+```
+
+## Perform a two sample t-test to see if there is a significant difference in the average response time for Ealing borough compared to Greenwich borough
+
+```{r}
+ealing.vs.greenwich <- fire_data %>% filter(IncGeo_BoroughName == "EALING" | IncGeo_BoroughName =="GREENWICH")
+ealing.vs.greenwich <- ealing.vs.greenwich %>% filter(!is.na(FirstPumpArriving_AttendanceTime))
+t.test(FirstPumpArriving_AttendanceTime~IncGeo_BoroughName, data=ealing.vs.greenwich)
+```
+
+## Perform confidence intervals for the estimates for each borough as well as the CI for the difference between boroughs
+
+```{r}
+eal.grn <- lm(FirstPumpArriving_AttendanceTime~IncGeo_BoroughName, data=ealing.vs.greenwich)
+( eal.grn.emm <- emmeans(eal.grn, ~IncGeo_BoroughName) )
+( eal.grn.contrast <- confint(pairs(eal.grn.emm)) ) 
+
+grid.arrange(
+    ggplot(summary(eal.grn.emm), aes(x=IncGeo_BoroughName, y=emmean, ymin=lower.CL, ymax=upper.CL)) + 
+        geom_point() + geom_linerange() + 
+        labs(y="Response Times / seconds", x="Borough Name", subtitle="Error bars are 95% CIs", title="Response Time") + ylim(305, 320), 
+    ggplot(eal.grn.contrast, aes(x=contrast, y=estimate, ymin=lower.CL, ymax=upper.CL)) + 
+        geom_point() + geom_linerange() + 
+        labs(y="Difference in Response Time / seconds", x="Contrast", subtitle="Error bars are 95% CIs", title="Difference in Response Times") + ylim(-1,10) +
+        geom_hline(yintercept=0, lty=2),
+    ncol=2
+)
+```
+
+
+
+# Section 2
+
+This report demonstrates the results of the analyses from the dataset of the London Fire Brigade. The total number of the incidents in the data is 322375. There was a small amount of missing data. Data of costs and for the incidents was removed.
+
+First of all, let's look at the total costs of fires and false alarms, which are £151,121,790	and £61,249,812. The average (mean) cost of responding to a fire, and of responding to a false alarm is £471.87 and £378.38, respectively.
+
+Next, this histogram shows the distribution of response times. We can see that the average of response time is 308.06 seconds.
+```{r echo=FALSE}
+ggplot(response) + geom_histogram(aes(x=response$FirstPumpArriving_AttendanceTime), binwidth = 2, colour = brewer.pal(7, "Set1")[2]) + geom_vline(aes(xintercept = mean(response$FirstPumpArriving_AttendanceTime)), colour="red") +  labs(x="Response Time") + geom_text(aes(x=mean(response$FirstPumpArriving_AttendanceTime)+200, label=paste0("Mean ", round(mean(response$FirstPumpArriving_AttendanceTime), 2)), y=2300))
+```
+
+After that, we compare the response times for the three different types of incident. From the graphs below, we can clearly see that "false alarm" takes place the most frequently, then "special service", "fire incident" is the least.
+```{r echo=FALSE}
+ggplot(response) + 
+  geom_histogram(aes(x = response$FirstPumpArriving_AttendanceTime), binwidth = 2, color=brewer.pal(7, "Set1")[2]) + 
+  ggtitle("The Ditribution of Response Times for Differents Types of Incident") + 
+  facet_grid(~ IncidentGroup) + 
+  labs(x="Response Time")
+```
+
+Let's further look at the special service incidents in detail. The table below exhibits the total number, mean response, 10th percentile of response times and 90th percentile of response times for each type of special service type. It is easy to see that "Effecting entry/exit" occurs the most, with 23,300 times; "Spills and Leaks" takes 350.32 seconds for the first fire engine to arrive on average, which is the longest. Through 10th percentile and 90th percentile of response times, we have general idea about the range of response times for each type of special service type.
+```{r echo=FALSE}
+sp_group
+```
+
+Null hypothesis: True difference in means between group EALING and group GREENWICH is equal to 0
+
+Alternative hypothesis:True difference in means between group EALING and group GREENWICH is not equal to 0
+```{r echo=FALSE}
+t.test(FirstPumpArriving_AttendanceTime~IncGeo_BoroughName, data=ealing.vs.greenwich)
+```
+A t-test analysis shows that the mean response time of Ealing is 316.93 seconds, and the mean response time of GreenWich is 311.38 seconds. The mean response time is significantly larger for that from Ealing, Welch t(19303) = 2.85, p = .004, with a difference of 5.55 seconds. Accoring to the result, we conclude the alternative hypothesis, which is the true difference in means between group EALING and group GREENWICH is not equal to 0.
+
+To have further information, we use general linear model to run a t-test and gain confidence intervals for the response times from each borough. Also, we plot both the CIs for the estimates for each borough as well as the CI for the difference between boroughs. In this way, we could clearly indicate the extent of uncertainty.
+```{r}
+( eal.grn.emm <- emmeans(eal.grn, ~IncGeo_BoroughName) )
+( eal.grn.contrast <- confint(pairs(eal.grn.emm)) ) 
+```
+
+```{r echo=FALSE}
+grid.arrange(
+    ggplot(summary(eal.grn.emm), aes(x=IncGeo_BoroughName, y=emmean, ymin=lower.CL, ymax=upper.CL)) + 
+        geom_point() + geom_linerange() + 
+        labs(y="Response Time / seconds", x="Borough Name", subtitle="Error bars are 95% CIs", title="Response Time") + ylim(305, 320), 
+    ggplot(eal.grn.contrast, aes(x=contrast, y=estimate, ymin=lower.CL, ymax=upper.CL)) + 
+        geom_point() + geom_linerange() + 
+        labs(y="Difference in Response Time / seconds", x="Contrast", subtitle="Error bars are 95% CIs", title="Difference in Response Times") + ylim(-1,10) +
+        geom_hline(yintercept=0, lty=2),
+    ncol=2
+)
+```
+
+The mean in response time for Ealing is 317 seconds 95% CI [314–320]. The mean response time for Greenwich is 311 seconds 95% CI [309–314]. The difference is 5.55 seconds 95% CI [1.73–9.38] smaller at Greenwich compared to Ealing. 
+
+From the plot of difference in response time, we can see that 0 is not included in the 95% confidence interval, which shares the same result with the t-test we have done above. Therefore, we are sure that average response time for Ealing should be greater than that for Greenwich.
+
